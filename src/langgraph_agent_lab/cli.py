@@ -30,15 +30,34 @@ def run_scenarios(
     checkpointer = build_checkpointer(cfg.get("checkpointer", "memory"), cfg.get("database_url"))
     graph = build_graph(checkpointer=checkpointer)
     metrics = []
+    thread_ids = []
+    checkpoint_counts = []
     for scenario in scenarios:
         state = initial_state(scenario)
         run_config = {"configurable": {"thread_id": state["thread_id"]}}
         final_state = graph.invoke(state, config=run_config)
-        metrics.append(metric_from_state(final_state, scenario.expected_route.value, scenario.requires_approval))
-    report = summarize_metrics(metrics)
+        metrics.append(
+            metric_from_state(
+                final_state,
+                scenario.expected_route.value,
+                scenario.requires_approval,
+            )
+        )
+        thread_ids.append(state["thread_id"])
+        if checkpointer is not None:
+            checkpoint_counts.append(len(list(graph.get_state_history(run_config))))
+    report = summarize_metrics(
+        metrics,
+        persistence_backend=cfg.get("checkpointer", "memory"),
+        thread_ids=thread_ids,
+        checkpoint_count=sum(checkpoint_counts),
+        resume_success=bool(checkpoint_counts),
+    )
     write_metrics(report, output)
     if cfg.get("report_path"):
         write_report(report, cfg["report_path"])
+    if hasattr(checkpointer, "close"):
+        checkpointer.close()
     typer.echo(f"Wrote metrics to {output}")
 
 
