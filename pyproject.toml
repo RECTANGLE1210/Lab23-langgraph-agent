@@ -14,6 +14,7 @@ dependencies = [
   "rich>=13.7",
   "typer>=0.12",
   "langgraph>=0.3.0",
+  "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +26,7 @@ dev = [
 ]
 google = ["langchain-google-genai>=2.1.0"]
 openai = ["langchain-openai>=0.3.0"]
+openrouter = ["langchain-openrouter>=0.1.0"]
 anthropic = ["langchain-anthropic>=0.3.0"]
 sqlite = ["langgraph-checkpoint-sqlite>=2.0"]
 postgres = ["langgraph-checkpoint-postgres>=2.0"]

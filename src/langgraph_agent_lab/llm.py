@@ -12,18 +12,44 @@ Usage in nodes:
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+from langchain_core.language_models import BaseChatModel
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_OPENROUTER_MODEL = "google/gemini-3.7-flash"
 
 
-def get_llm(model: str | None = None, temperature: float = 0.0):
+def _load_environment() -> None:
+    """Load the repository .env without overriding explicitly-set variables."""
+    load_dotenv(_REPO_ROOT / ".env", override=False)
+
+
+def get_llm(model: str | None = None, temperature: float = 0.0) -> BaseChatModel:
     """Create an LLM client from environment configuration.
 
     Checks for API keys in this order:
-    1. GEMINI_API_KEY → ChatGoogleGenerativeAI
-    2. OPENAI_API_KEY → ChatOpenAI
-    3. ANTHROPIC_API_KEY → ChatAnthropic
+    1. OPENROUTER_API_KEY → ChatOpenRouter
+    2. GEMINI_API_KEY → ChatGoogleGenerativeAI
+    3. OPENAI_API_KEY → ChatOpenAI
+    4. ANTHROPIC_API_KEY → ChatAnthropic
 
     Override model with the `model` parameter or LLM_MODEL env var.
     """
+    _load_environment()
+
+    if os.getenv("OPENROUTER_API_KEY"):
+        try:
+            from langchain_openrouter import ChatOpenRouter
+        except ImportError as exc:
+            raise RuntimeError("Install: pip install langchain-openrouter") from exc
+        return ChatOpenRouter(
+            model=model or os.getenv("LLM_MODEL") or _DEFAULT_OPENROUTER_MODEL,
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            temperature=temperature,
+        )
+
     if os.getenv("GEMINI_API_KEY"):
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
@@ -56,6 +82,7 @@ def get_llm(model: str | None = None, temperature: float = 0.0):
         )
 
     raise RuntimeError(
-        "No LLM API key found. Set GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in .env\n"
+        "No LLM API key found. Set OPENROUTER_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, "
+        "or ANTHROPIC_API_KEY in .env\n"
         "See .env.example for configuration."
     )
