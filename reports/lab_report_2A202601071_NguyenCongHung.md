@@ -10,7 +10,7 @@
 
 The graph follows `START -> intake -> classify`, then uses conditional routing: simple -> answer; tool -> tool -> evaluate; missing_info -> clarify; risky -> risky_action -> approval -> tool -> evaluate; and error -> retry -> tool/dead_letter. Every path ends at `finalize -> END`.
 
-`classify_node` uses OpenRouter with `google/gemini-3.7-flash` and structured output. `answer_node` uses grounded LLM generation. The workflow has bounded retry, deterministic mock approval, and SQLite checkpoint persistence.
+`classify_node` uses OpenRouter with `google/gemini-3.7-flash` and structured output. `answer_node` uses grounded LLM generation. The workflow has bounded retry, native LangGraph HITL approval with `interrupt()`/`Command(resume=...)`, and SQLite checkpoint persistence. Batch evaluation auto-approves the native interrupt for deterministic evaluation.
 
 ## 3. State schema
 
@@ -49,12 +49,12 @@ Observed execution summary: 7 scenarios, 7 successful, success rate 100.0%.
 | S06_delete | risky | risky | True | 0 | 1 |
 | S07_dead_letter | error | error | True | 1 | 0 |
 
-`Interrupts` currently counts observed approval checkpoints/events in the lab's deterministic mock approval path; native LangGraph `interrupt()/resume` HITL is not yet implemented.
+`Interrupts` counts the approval events produced after native LangGraph interrupts are resumed. Risky scenarios pause before the tool, then the batch runner resumes the same `thread_id` with approval.
 
 ## 5. Failure analysis
 
 1. Retry or tool failure: observed in `S05_error`. The retry node increments the attempt, `evaluate` requests another try when the tool result contains an error, and the bounded workflow recovered. Observed retry events: 2.
-2. Risky action without approval: approval-path evidence was observed in `S04_risky, S06_delete`. Risky classification reaches `risky_action` and then `approval`; only approval proceeds to the tool, while rejection routes to clarification. Additional retry exhaustion observed in `S07_dead_letter`.
+2. Risky action without approval: native HITL evidence was observed in `S04_risky, S06_delete`. The first invocation pauses at `approval` before `tool`; resume with approval continues to `tool`, while a separate rejection test resumes `False` and routes to `clarify` without executing `tool`. Additional retry exhaustion was observed in `S07_dead_letter`.
 
 ## 6. Persistence / recovery evidence
 
@@ -71,10 +71,10 @@ Recovery evidence:
 
 ## 7. Extension work
 
-No optional extension has been finalized yet; SQLite persistence/recovery is implemented as the persistence requirement. A graph diagram or real HITL flow may be added in the final extension gate.
+Native LangGraph HITL approval was implemented with `interrupt()` and `Command(resume=...)` using a thread-scoped checkpointer. Both approved and rejected paths were tested. The batch runner auto-approves only for deterministic evaluation; a separate rejection test resumes `False` and verifies that the risky tool is not executed. The graph topology was also exported as `outputs/graph.mmd`.
 
 ## 8. Improvement plan
 
-- Replace mock approval with real `interrupt()/resume` HITL.
+- Connect native HITL to an authenticated operator or UI workflow.
 - Improve tool-result evaluation with LLM-as-judge or a stronger evaluator.
 - Add production observability for latency, provider, and checkpoint failures.

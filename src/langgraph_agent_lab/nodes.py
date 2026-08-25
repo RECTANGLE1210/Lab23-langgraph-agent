@@ -236,19 +236,45 @@ def risky_action_node(state: AgentState) -> dict:
 def approval_node(state: AgentState) -> dict:
     """Human-in-the-loop approval step.
 
-    Default behavior: mock approval (approved=True) so tests and CI run offline.
-    Extension: if env LANGGRAPH_INTERRUPT=true, use langgraph.types.interrupt() for real HITL.
+    Pause the graph until a caller resumes the same checkpointed thread.
 
     Return: {"approval": {...}, "events": [make_event(...)]}
     """
+    from langgraph.types import interrupt
+
+    request = {
+        "type": "approval_required",
+        "question": "Approve this proposed action?",
+        "proposed_action": state.get("proposed_action") or "",
+        "risk_level": state.get("risk_level") or "high",
+    }
+    response = interrupt(request)
+    if isinstance(response, dict):
+        approved_value = response.get("approved", response.get("approve", False))
+        approved = approved_value if isinstance(approved_value, bool) else False
+        reviewer = str(response.get("reviewer") or "native-hitl")
+        comment = str(response.get("comment") or response.get("reason") or "")
+    else:
+        approved = response if isinstance(response, bool) else False
+        reviewer = "native-hitl"
+        comment = "Approved by batch evaluation." if approved else "Rejected by reviewer."
+
     decision = ApprovalDecision(
-        approved=True,
-        reviewer="mock-reviewer",
-        comment="Approved by deterministic offline Gate 1 mock reviewer.",
+        approved=approved,
+        reviewer=reviewer,
+        comment=comment,
     ).model_dump()
     return {
         "approval": decision,
-        "events": [make_event("approval", "completed", "mock approval recorded", approved=True)],
+        "events": [
+            make_event(
+                "approval",
+                "completed",
+                "approval decision recorded",
+                approved=approved,
+                reviewer=reviewer,
+            )
+        ],
     }
 
 

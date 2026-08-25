@@ -32,10 +32,17 @@ def run_scenarios(
     metrics = []
     thread_ids = []
     checkpoint_counts = []
+    native_interrupts = 0
     for scenario in scenarios:
         state = initial_state(scenario)
         run_config = {"configurable": {"thread_id": state["thread_id"]}}
-        final_state = graph.invoke(state, config=run_config)
+        invocation = graph.invoke(state, config=run_config)
+        final_state = invocation
+        if isinstance(invocation, dict) and invocation.get("__interrupt__"):
+            from langgraph.types import Command
+
+            native_interrupts += 1
+            final_state = graph.invoke(Command(resume=True), config=run_config)
         metrics.append(
             metric_from_state(
                 final_state,
@@ -58,6 +65,7 @@ def run_scenarios(
         write_report(report, cfg["report_path"])
     if hasattr(checkpointer, "close"):
         checkpointer.close()
+    typer.echo(f"Native interrupts observed: {native_interrupts}")
     typer.echo(f"Wrote metrics to {output}")
 
 

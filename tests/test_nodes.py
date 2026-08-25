@@ -117,12 +117,10 @@ def test_remaining_nodes_return_expected_contracts() -> None:
     assert "approval" in risky["proposed_action"].lower()
     assert risky["events"][0]["node"] == "risky_action"
 
-    approval = approval_node({})
-    assert approval["approval"] == {
-        "approved": True,
-        "reviewer": "mock-reviewer",
-        "comment": "Approved by deterministic offline Gate 1 mock reviewer.",
-    }
+    with patch("langgraph.types.interrupt", return_value=True):
+        approval = approval_node({"proposed_action": "Delete the account"})
+    assert approval["approval"]["approved"] is True
+    assert approval["approval"]["reviewer"] == "native-hitl"
     assert approval["events"][0]["node"] == "approval"
 
     retry = retry_or_fallback_node({"attempt": 1})

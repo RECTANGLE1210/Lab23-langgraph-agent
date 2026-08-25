@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
 
 from langgraph_agent_lab.graph import build_graph
 from langgraph_agent_lab.state import ClassificationSchema, Route, Scenario, initial_state
@@ -100,6 +101,11 @@ def test_graph_routes_all_paths_and_bounds_retries() -> None:
                 state,
                 config={"configurable": {"thread_id": state["thread_id"]}},
             )
+            if result.get("__interrupt__"):
+                result = graph.invoke(
+                    Command(resume=True),
+                    config={"configurable": {"thread_id": state["thread_id"]}},
+                )
 
         visited = [event["node"] for event in result["events"]]
         assert result["route"] == expected_route.value

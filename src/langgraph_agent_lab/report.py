@@ -37,7 +37,8 @@ def render_report(metrics: MetricsReport) -> str:
         (
             f"`classify_node` uses OpenRouter with `{model}` and structured output. "
             "`answer_node` uses grounded LLM generation. The workflow has bounded "
-            "retry, deterministic mock approval, and SQLite checkpoint persistence."
+            "retry, native LangGraph HITL approval, and SQLite checkpoint persistence. "
+            "Batch evaluation resumes approval interrupts with a deterministic approval."
         ),
         "",
         "## 3. State schema",
@@ -73,14 +74,14 @@ def render_report(metrics: MetricsReport) -> str:
         "## 7. Extension work",
         "",
         (
-            "No optional extension has been finalized yet; SQLite persistence/"
-            "recovery is implemented as the persistence requirement. A graph "
-            "diagram or real HITL flow may be added in the final extension gate."
+            "Native LangGraph HITL is the extension: `interrupt()` pauses before "
+            "the risky tool and `Command(resume=...)` continues the same persisted "
+            "thread. Approved and rejected paths are covered by offline tests."
         ),
         "",
         "## 8. Improvement plan",
         "",
-        "- Replace mock approval with real `interrupt()/resume` HITL.",
+        "- Connect native HITL to an authenticated operator or UI workflow.",
         "- Improve tool-result evaluation with LLM-as-judge or a stronger evaluator.",
         "- Add production observability for latency, provider, and checkpoint failures.",
         "",
@@ -154,11 +155,11 @@ def _failure_analysis(items: list[ScenarioMetric]) -> list[str]:
             f"Observed retry events: {retry_count}."
         ),
         (
-            f"2. Risky action without approval: approval-path evidence was "
-            f"observed in `{risky_ids}`. Risky classification reaches "
-            "`risky_action` and then `approval`; only approval proceeds to the "
-            f"tool, while rejection routes to clarification. Additional retry "
-            f"exhaustion observed in `{dead_letter_ids}`."
+            f"2. Risky action without approval: native HITL approval-path "
+            f"evidence was observed in `{risky_ids}`. Risky classification reaches "
+            "`risky_action` and pauses at `approval` before the tool; approval "
+            "resumes to the tool while rejection routes to clarification. "
+            f"Additional retry exhaustion observed in `{dead_letter_ids}`."
         ),
     ]
 

@@ -47,16 +47,23 @@ pytestmark = [
     ],
 )
 def test_graph_runs_and_routes_correctly(query: str, expected_route: str) -> None:
+    from langgraph.types import Command
+
     graph = build_graph(checkpointer=build_checkpointer("memory"))
     scenario = Scenario(id="smoke", query=query, expected_route=Route(expected_route))
     state = initial_state(scenario)
-    result = graph.invoke(state, config={"configurable": {"thread_id": state["thread_id"]}})
+    config = {"configurable": {"thread_id": state["thread_id"]}}
+    result = graph.invoke(state, config=config)
+    if result.get("__interrupt__"):
+        result = graph.invoke(Command(resume=True), config=config)
     assert result["route"] == expected_route
     assert result.get("final_answer") or result.get("pending_question")
 
 
 def test_graph_terminates_all_routes() -> None:
     """Verify every route reaches finalize node."""
+    from langgraph.types import Command
+
     graph = build_graph(checkpointer=build_checkpointer("memory"))
     queries = [
         ("simple query about help", Route.SIMPLE),
@@ -68,7 +75,10 @@ def test_graph_terminates_all_routes() -> None:
     for query, route in queries:
         scenario = Scenario(id=f"term-{route.value}", query=query, expected_route=route)
         state = initial_state(scenario)
-        result = graph.invoke(state, config={"configurable": {"thread_id": state["thread_id"]}})
+        config = {"configurable": {"thread_id": state["thread_id"]}}
+        result = graph.invoke(state, config=config)
+        if result.get("__interrupt__"):
+            result = graph.invoke(Command(resume=True), config=config)
         events = result.get("events", [])
         finalize_events = [e for e in events if e.get("node") == "finalize"]
         assert finalize_events, f"Route {route.value} did not reach finalize node"
